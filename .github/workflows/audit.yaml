@@ -88,9 +88,9 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const auditOutcome = '${{ needs.iac-security-audit.outputs.audit-outcome }}';
-            const auditResults = '${{ needs.iac-security-audit.outputs.audit-results }}';
-            const filepath = '${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test' }}';
+            const auditOutcome = `${{ needs.iac-security-audit.outputs.audit-outcome }}`;
+            const auditResults = `${{ needs.iac-security-audit.outputs.audit-results }}`;
+            const filepath = `${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test' }}`;
             
             let commentBody = `## 🔍 AI Security Audit Results\n\n`;
             commentBody += `**Path analyzed:** \`${filepath}\`\n\n`;
@@ -104,7 +104,7 @@ jobs:
               if (auditResults && auditResults.trim()) {
                 commentBody += '```\n' + auditResults + '\n```';
               } else {
-                commentBody += `Please check the [workflow run](${context.payload.pull_request.html_url}/checks) for detailed vulnerability information.`;
+                commentBody += `Please check the workflow run for detailed vulnerability information.`;
               }
               commentBody += `\n\n**Next Steps:**\n`;
               commentBody += `1. Review the vulnerability details above\n`;
