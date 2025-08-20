@@ -3,7 +3,7 @@
 ## Automated IaC Security Auditor
 
 ### The Problem
-Manually reviewing IaC) files, like Terraform, for security misconfigurations is time-consuming and error-prone. It's easy to miss issues like publicly exposed S3 buckets, unrestricted security groups, or missing encryption.
+Manually reviewing IaC files for security misconfigurations is time-consuming and error-prone. It's easy to miss issues like publicly exposed S3 buckets, unrestricted security groups, or missing encryption.
 
 ### The Solution
 Build an AI assistant that automatically scans Terraform code, identifies potential security vulnerabilities, explains the risk, and suggests the corrected code block. This leverages an LLM's ability to understand code and security best practices.
