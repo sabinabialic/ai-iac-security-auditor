@@ -2,13 +2,9 @@ name: Terraform Security Audit
 
 on:
   pull_request:
-    paths:
-      - '**.tf'
   push:
     branches:
       - main
-    paths:
-      - '**.tf'
   workflow_dispatch:
     inputs:
       filepath:
@@ -18,34 +14,53 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write # This permission is specifically for the PR comment job
+  pull-requests: write
 
 jobs:
-  audit-no-comment:
+  security-audit:
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Find changed Terraform files
+        id: find_files
+        run: |
+          # This command finds all .tf files that were added or modified in the PR
+          # It requires the GITHUB_TOKEN to access the API
+          PR_URL="${{ github.event.pull_request.url }}/files"
+          FILES=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" $PR_URL | jq -r '.[] | select(.filename | endswith(".tf")) | .filename')
+          
+          if [ -z "$FILES" ]; then
+            echo "No .tf files changed in this PR. Skipping audit."
+            echo "files_found=false" >> $GITHUB_OUTPUT
+          else
+            echo "Found changed .tf files:"
+            echo "$FILES"
+            echo "files_found=true" >> $GITHUB_OUTPUT
+            # Convert list of files to a single space-separated string for the next step
+            echo "files_to_audit=$(echo $FILES | tr '\n' ' ')" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run AI Security Auditor
-        uses: ./
-        with:
-          filepath: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test' }}
-        env:
-          HUGGING_FACE_HUB_TOKEN: ${{ secrets.HUGGING_FACE_HUB_TOKEN }}
-
-  audit-with-pr-comment:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run AI Security Auditor and Comment on PR
-        uses: ./
-        with:
-          filepath: 'test'
+        if: steps.find_files.outputs.files_found == 'true'
+        run: |
+          OVERALL_FAILURE=0
+          for file in ${{ steps.find_files.outputs.files_to_audit }}; do
+            echo -e "\n--- Auditing: $file ---"
+            if ! python3 main.py "$file"; then
+              echo "❌ Vulnerabilities found in $file"
+              OVERALL_FAILURE=1
+            else
+              echo "✅ No vulnerabilities found in $file"
+            fi
+          done
+          
+          if [ $OVERALL_FAILURE -eq 1 ]; then
+            exit 1
+          fi
         env:
           HUGGING_FACE_HUB_TOKEN: ${{ secrets.HUGGING_FACE_HUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
