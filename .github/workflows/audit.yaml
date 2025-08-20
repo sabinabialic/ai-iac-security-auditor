@@ -17,47 +17,26 @@ on:
         default: 'test'
 
 permissions:
-  contents: read
   pull-requests: write
-  checks: write
 
 jobs:
-  # Find all Terraform files to be audited
-  finder:
+  iac-security-audit:
     runs-on: ubuntu-latest
-    outputs:
-      # Output the list of files as a JSON array
-      matrix: ${{ steps.find_files.outputs.files }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Find Terraform files
-        id: find_files
-        run: |
-          TF_FILES=$(find . -name "*.tf" -type f | jq -R . | jq -s .)
-          echo "files=$TF_FILES" >> $GITHUB_OUTPUT
-
-  # Run the audit on each file found by the 'finder' job
-  security-audit:
-    runs-on: ubuntu-latest
-    needs: finder
-    if: needs.finder.outputs.matrix != '[]'
-    
-    # Define the matrix strategy at the job level
-    strategy:
-      matrix:
-        file: ${{ fromJson(needs.finder.outputs.matrix) }}
-      fail-fast: false
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run AI Security Auditor on ${{ matrix.file }}
-        uses: ./
+      - name: Run AI Security Auditor
+        id: audit_step
+        uses: ./ 
         with:
-          filepath: ${{ matrix.file }}
+          filepath: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test' }}
         env:
           HUGGING_FACE_HUB_TOKEN: ${{ secrets.HUGGING_FACE_HUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check Audit Results
+        if: failure()
+        run: |
+          echo "❌ AI Security Auditor found vulnerabilities. Failing the workflow."
+          exit 1
