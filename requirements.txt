@@ -1,0 +1,7 @@
+langchain
+langchain-huggingface
+huggingface-hub
+python-hcl2
+transformers
+torch
+accelerate
