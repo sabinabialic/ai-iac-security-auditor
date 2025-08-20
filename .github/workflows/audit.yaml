@@ -1,0 +1,20 @@
+name: Terraform Security Audit
+
+on:
+  pull_request:
+    paths:
+      - '**.tf'
+
+jobs:
+  iac-security-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run AI Security Auditor
+        uses: ./ 
+        with:
+          filepath: ./test/test.tf
+        env:
+          HUGGING_FACE_HUB_TOKEN: ${{ secrets.HUGGING_FACE_HUB_TOKEN }}

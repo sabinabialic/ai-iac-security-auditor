@@ -1,0 +1,14 @@
+name: 'AI IaC Security Auditor'
+description: 'Scans a Terraform file for security vulnerabilities using an AI assistant.'
+author: 'Sabina Bialic'
+
+inputs:
+  filepath:
+    description: 'The path to the Terraform file to audit.'
+    required: true
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.filepath }}
