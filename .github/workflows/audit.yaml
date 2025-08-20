@@ -86,11 +86,15 @@ jobs:
     steps:
       - name: Post Audit Results as a PR Comment
         uses: actions/github-script@v7
+        env:
+          AUDIT_OUTCOME: ${{ needs.iac-security-audit.outputs.audit-outcome }}
+          AUDIT_RESULTS: ${{ needs.iac-security-audit.outputs.audit-results }}
+          FILEPATH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test' }}
         with:
           script: |
-            const auditOutcome = `${{ needs.iac-security-audit.outputs.audit-outcome }}`;
-            const auditResults = `${{ needs.iac-security-audit.outputs.audit-results }}`;
-            const filepath = `${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test' }}`;
+            const auditOutcome = process.env.AUDIT_OUTCOME;
+            const auditResults = process.env.AUDIT_RESULTS;
+            const filepath = process.env.FILEPATH;
             
             let commentBody = `## 🔍 AI Security Audit Results\n\n`;
             commentBody += `**Path analyzed:** \`${filepath}\`\n\n`;
