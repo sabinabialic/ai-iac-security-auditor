@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       filepath:
-        description: 'Path to the Terraform file or directory to audit (e.g., test/test.tf or test/)'
+        description: 'Path to the Terraform file to audit'
         required: true
         default: 'test'
 
@@ -26,110 +26,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Find Terraform files to audit
-        id: find_files
-        run: |
-          INPUT_PATH="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test' }}"
-          
-          if [ -f "$INPUT_PATH" ]; then
-            # Single file
-            echo "tf_files=$INPUT_PATH" >> $GITHUB_OUTPUT
-            echo "file_count=1" >> $GITHUB_OUTPUT
-          elif [ -d "$INPUT_PATH" ]; then
-            # Directory - find all .tf files
-            TF_FILES=$(find "$INPUT_PATH" -name "*.tf" -type f | tr '\n' ' ' | sed 's/ $//')
-            FILE_COUNT=$(find "$INPUT_PATH" -name "*.tf" -type f | wc -l)
-            echo "tf_files=$TF_FILES" >> $GITHUB_OUTPUT
-            echo "file_count=$FILE_COUNT" >> $GITHUB_OUTPUT
-          else
-            echo "❌ Path $INPUT_PATH not found"
-            exit 1
-          fi
-          
-          echo "Found $FILE_COUNT Terraform file(s) to audit:"
-          echo "$TF_FILES"
-
       - name: Run AI Security Auditor
         id: audit_step
-        run: |
-          TF_FILES="${{ steps.find_files.outputs.tf_files }}"
-          FILE_COUNT="${{ steps.find_files.outputs.file_count }}"
-          FAILED_FILES=""
-          SUCCESS_COUNT=0
-          FAIL_COUNT=0
-          
-          echo "🔍 Starting security audit of $FILE_COUNT file(s)..."
-          
-          for file in $TF_FILES; do
-            echo ""
-            echo "===================="
-            echo "Auditing: $file"
-            echo "===================="
-            
-            if python3 main.py "$file"; then
-              echo "✅ $file - PASSED"
-              SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-            else
-              echo "❌ $file - FAILED"
-              FAILED_FILES="$FAILED_FILES $file"
-              FAIL_COUNT=$((FAIL_COUNT + 1))
-            fi
-          done
-          
-          echo ""
-          echo "===================="
-          echo "AUDIT SUMMARY"
-          echo "===================="
-          echo "Total files: $FILE_COUNT"
-          echo "Passed: $SUCCESS_COUNT"
-          echo "Failed: $FAIL_COUNT"
-          
-          if [ $FAIL_COUNT -gt 0 ]; then
-            echo "failed_files=$FAILED_FILES" >> $GITHUB_OUTPUT
-            echo "audit_result=failed" >> $GITHUB_OUTPUT
-            exit 1
-          else
-            echo "audit_result=passed" >> $GITHUB_OUTPUT
-          fi
+        uses: ./ 
+        with:
+          filepath: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test' }}
         env:
           HUGGING_FACE_HUB_TOKEN: ${{ secrets.HUGGING_FACE_HUB_TOKEN }}
-        continue-on-error: true
 
-      - name: Display Audit Results
-        if: always()
+      - name: Check Audit Results
+        if: ${{ failure() && steps.audit_step.outcome == 'failure' }}
         run: |
-          FILE_COUNT="${{ steps.find_files.outputs.file_count }}"
-          INPUT_PATH="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test' }}"
-          
-          if [ "${{ steps.audit_step.outcome }}" == "success" ]; then
-            echo "✅ Security audit PASSED - no vulnerabilities detected!"
-            echo "📁 Path analyzed: $INPUT_PATH"
-            echo "📊 Files processed: $FILE_COUNT"
-          else
-            echo "❌ Security audit FAILED - vulnerabilities detected!"
-            echo "📁 Path analyzed: $INPUT_PATH"
-            echo "📊 Files processed: $FILE_COUNT"
-            
-            FAILED_FILES="${{ steps.audit_step.outputs.failed_files }}"
-            if [ -n "$FAILED_FILES" ]; then
-              echo ""
-              echo "🚨 Files with vulnerabilities:"
-              for file in $FAILED_FILES; do
-                echo "  - $file"
-              done
-            fi
-            
-            echo ""
-            echo "🔍 Vulnerability Details:"
-            echo "See the 'Run AI Security Auditor' step above for complete analysis results for each file."
-            echo ""
-            echo "🛠️  Next Steps:"
-            echo "1. Review the vulnerability details in the audit output above"
-            echo "2. Apply the recommended fixes to the flagged Terraform files"
-            echo "3. Re-run the workflow to verify fixes"
-            echo ""
-            echo "📖 Resources:"
-            echo "- Terraform Security Best Practices: https://docs.bridgecrew.io/docs/terraform"
-            echo "- AWS Security Groups: https://docs.aws.amazon.com/vpc/latest/userguide/VPC_SecurityGroups.html"
-            exit 1
-          fi
+          echo "❌ AI Security Auditor found vulnerabilities. Failing the workflow."
+          exit 1
