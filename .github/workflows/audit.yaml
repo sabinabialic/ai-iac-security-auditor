@@ -127,7 +127,7 @@ jobs:
                   const fileName = sections[i];
                   const fileContent = sections[i + 1]?.trim() || '';
                   
-                  processedContent += `### 📄 File: \`${fileName}\`\n\n`;
+                  processedContent += `---\n\n### 📄 File: \`${fileName}\`\n\n`;
                   
                   if (fileContent.includes('⚠️ **Error')) {
                     processedContent += fileContent + '\n\n';
@@ -137,8 +137,8 @@ jobs:
                     // Format vulnerability details
                     let formattedContent = fileContent
                       .replace(/- \*\*Vulnerability:\*\*/g, '**🚨 Vulnerability:**')
-                      .replace(/- \*\*Risk:\*\*/g, '**⚠️ Risk:**')
-                      .replace(/- \*\*Remediation:\*\*/g, '**🛠️ Remediation:**');
+                      .replace(/- \*\*Risk:\*\*/g, '\n\n**⚠️ Risk:**')
+                      .replace(/- \*\*Remediation:\*\*/g, '\n\n**🛠️ Remediation:**');
                     
                     processedContent += formattedContent + '\n\n';
                   }
