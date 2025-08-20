@@ -20,6 +20,18 @@ Build an AI assistant that automatically scans Terraform code, identifies potent
 - **LLM:** CodeLlama, available via Hugging Face.
 - **Interface:** A CLI tool that can be integrated directly into a CI/CD pipeline.
 
+## Who Benefits?
+Developers get instant, actionable feedback on their Terraform code directly in their workflow, allowing them to learn and fix security issues on the spot without waiting for a manual review.
+
+DevOps & Security teams can enforce security standards automatically across all projects, reducing the risk of human error and ensuring a consistent security baseline for all cloud infrastructure.
+
+## How It's Used
+### As a Local Developer Tool
+A developer runs your CLI assistant on their machine against a .tf file. The tool immediately provides a report detailing any security issues, explaining the risks, and providing corrected code snippets.
+
+### As an Automated CI/CD Guardrail
+The tool is integrated into a CI/CD pipeline (e.g., as a GitHub Action). When a developer submits a pull request with Terraform changes, the action runs automatically. If vulnerabilities are found, it can fail the build or post a comment on the PR, preventing insecure code from being merged.
+
 ## Development
 1. Create and activate a virtual environment:
   ```
@@ -29,5 +41,5 @@ Build an AI assistant that automatically scans Terraform code, identifies potent
 
 2. Install the necessary Python libraries:
   ```
-  pip install langchain langchain-huggingface huggingface-hub python-hcl2
+  pip install -r requirements.txt
   ```
