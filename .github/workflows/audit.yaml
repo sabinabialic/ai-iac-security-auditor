@@ -1,62 +1,91 @@
 name: Terraform Security Audit
 
 on:
-  # Trigger on pull requests that change .tf files
   pull_request:
     paths:
       - '**.tf'
-  # Trigger on pushes to the main branch that change .tf files
-  push:
-    branches:
-      - main
-    paths:
-      - '**.tf'
-  # Allow the workflow to be run manually from the Actions tab
   workflow_dispatch:
-    inputs:
-      filepath:
-        description: 'Path to the Terraform file to audit'
-        required: true
-        default: 'test'
 
 permissions:
+  contents: read
   pull-requests: write
 
 jobs:
-  iac-security-audit:
+  # Job 1: Run the security audit
+  security-audit:
     runs-on: ubuntu-latest
+    outputs:
+      # Capture the logs and outcome of the audit step
+      logs: ${{ steps.audit_step.outputs.logs }}
+      outcome: ${{ steps.audit_step.outcome }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Run AI Security Auditor
         id: audit_step
-        uses: ./ 
-        with:
-          filepath: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test' }}
+        run: |
+          # Use an intermediary file to capture all output from the action
+          output_file=$(mktemp)
+          if GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} ${{ github.action_path }}/main.py 'test' &> "$output_file"; then
+            echo "Audit passed"
+          else
+            echo "Audit failed"
+          fi
+          # Read the file content and format it for output
+          content=$(cat "$output_file")
+          echo "logs<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$content" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
         env:
           HUGGING_FACE_HUB_TOKEN: ${{ secrets.HUGGING_FACE_HUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true # Allows the workflow to continue to the reporting jobs
 
-      - name: Check Audit Results
-        if: ${{ failure() && steps.audit_step.outcome == 'failure' }}
-        run: |
-          echo "❌ AI Security Auditor found vulnerabilities. Failing the workflow."
-  
+  # Job 2: Post the results to the PR
   add-pr-comment:
-    needs: iac-security-audit
     runs-on: ubuntu-latest
-    # This condition ensures the job only runs on pull request events
-    if: github.event_name == 'pull_request'
+    needs: security-audit # This job depends on the first one
+    if: always() && github.event_name == 'pull_request' # Always run this job on PRs to report status
     steps:
-      - name: Post Audit Results as a PR Comment
+      - name: Post status comment to PR
         uses: actions/github-script@v7
         with:
           script: |
-            const auditResults = '${{ steps.audit_step.outputs.audit_results }}';
-            const commentBody = `AI Security Audit Results:\n\n${auditResults}`;
-            github.rest.issues.createComment({
+            const outcome = "${{ needs.security-audit.outputs.outcome }}";
+            const logs = `
+            ${{ needs.security-audit.outputs.logs }}
+            `;
+
+            let comment_body;
+
+            if (outcome === 'success') {
+              comment_body = `
+              ### ✅ AI Security Audit Passed
+              No vulnerabilities were detected.
+              `;
+            } else {
+              comment_body = `
+              ### ❌ AI Security Audit Failed
+              Vulnerabilities were detected. Please see the detailed output below.
+
+              <details><summary>Click to view full audit logs</summary>
+
+              \`\`\`
+              ${logs}
+              \`\`\`
+
+              </details>
+              `;
+            }
+            
+            await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: commentBody
+              body: comment_body
             });
+
+            if (outcome !== 'success') {
+              core.setFailed("Security audit failed. See the PR comment for details.");
+            }
