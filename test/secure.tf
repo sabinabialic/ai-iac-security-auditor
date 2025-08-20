@@ -4,6 +4,7 @@ resource "aws_s3_bucket" "secure_data" {
   tags = {
     Name        = "My Secure Bucket"
     Environment = "Production"
+    Application = "DataProcessing"
   }
 }
 
