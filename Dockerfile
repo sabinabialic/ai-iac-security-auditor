@@ -10,7 +10,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy your main Python script and any other necessary files
 COPY main.py .
-COPY config.py .
 
 # Define the entrypoint for the container. This will run your script.
 ENTRYPOINT ["python", "/app/main.py"]
