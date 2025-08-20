@@ -2,27 +2,24 @@ import argparse
 import os
 import hcl2
 import json
+import sys
 from huggingface_hub import InferenceClient
 
 # Configuration
 MODEL_ID = "mistralai/Mistral-7B-Instruct-v0.2"
 
-SYSTEM_PROMPT = """You are an expert security auditor for Terraform code. Your task is to analyze the provided Terraform resource and identify any security vulnerabilities based on industry best practices.
+SYSTEM_PROMPT = """You are an expert security auditor for Terraform code. Your task is to analyze the provided Terraform resource and identify any security vulnerabilities based on industry best practices. Your analysis must be strict and accurate.
 
-Look for common misconfigurations, including but not limited to:
-- Unrestricted network access (e.g., security group ingress from "0.0.0.0/0").
-- Publicly exposed storage buckets.
-- Missing encryption on resources like S3 buckets or EBS volumes.
-- Hardcoded secrets or sensitive credentials.
-- Overly permissive IAM roles and policies.
+**Rules:**
+1.  Analyze ONLY the provided Terraform code block. Do not assume other resources exist.
+2.  If you find one or more vulnerabilities, your response MUST follow this exact format for each one:
+    - **Vulnerability:** A one-sentence summary and its severity (CRITICAL, HIGH, MEDIUM, LOW).
+    - **Risk:** A brief explanation of the security risk.
+    - **Remediation:** The corrected, secure code block.
+3.  If, and only if, you find absolutely no vulnerabilities, you MUST respond with only this exact phrase and nothing else: `✅ No security issues found in this configuration.`
+4.  Do not add any extra conversation, commentary, or recommendations for "best practices" if no direct vulnerability is found in the provided code.
 
-For each vulnerability you find, you must provide the following information in a clear, structured format using Markdown:
-- Vulnerability: A one-sentence summary of the issue and its severity (CRITICAL, HIGH, MEDIUM, LOW).
-- Risk: A brief explanation of why this configuration is a security risk.
-- Remediation: The corrected, secure code block that mitigates the vulnerability.
-
-If you find no vulnerabilities, you must respond with only this exact phrase:
-✅ No security issues found in this configuration.
+Begin your analysis now.
 """
 
 # Create the auditor
@@ -63,51 +60,54 @@ def main():
     args = parser.parse_args()
 
     print(f"🔍 Auditing {args.filepath}...")
+    vulnerabilities_found = False
 
     try:
+        # Read the entire file content into one string
         with open(args.filepath, 'r', encoding='utf-8') as file:
-            tf_data = hcl2.load(file)
+            full_terraform_code = file.read()
 
         auditor = create_security_auditor()
 
-        if 'resource' in tf_data:
-            for resource_block in tf_data['resource']:
-                for resource_type, resource_config in resource_block.items():
-                    for resource_name, resource_body in resource_config.items():
-                        print(f"\n--- Analyzing resource: {resource_type}.{resource_name} ---")
-                        
-                        if isinstance(resource_body, list) and resource_body:
-                            resource_body = resource_body[0]
-                        
-                        resource_code = format_terraform_resource(resource_type, resource_name, resource_body)
-                        
-                        # Format the prompt for a chat/conversational model
-                        messages = [
-                            {"role": "system", "content": SYSTEM_PROMPT},
-                            {"role": "user", "content": resource_code}
-                        ]
-                        
-                        print("🤖 Sending request to remote AI model...")
-                        
-                        # Use the chat_completion method for instruction-tuned models
-                        response = auditor.chat_completion(
-                            model=MODEL_ID,
-                            messages=messages,
-                            max_tokens=1024
-                        )
-                        
-                        # Extract the generated text from the response object
-                        analysis_result = response.choices[0].message.content.strip()
+        # Format the prompt for the entire file
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": full_terraform_code}
+        ]
+        
+        print("\n--- Analyzing full file content ---")
+        print("🤖 Sending request to remote AI model...")
+        
+        # Send the entire file content in a single API call
+        response = auditor.chat_completion(
+            model=MODEL_ID,
+            messages=messages,
+            max_tokens=2048
+        )
+        
+        analysis_result = response.choices[0].message.content.strip()
 
-                        if analysis_result:
-                            print(f"Security Analysis Result:\n{analysis_result}")
-                        else:
-                            print("⚠️ Warning: Empty response from AI model.")
+        if analysis_result:
+            print(f"Security Analysis Result:\n{analysis_result}")
+            if "✅ No security issues found" not in analysis_result:
+                vulnerabilities_found = True
+        else:
+            print("⚠️ Warning: Empty response from AI model.")
 
     except FileNotFoundError:
         print(f"Error: The file '{args.filepath}' was not found.")
+        sys.exit(1)
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+        sys.exit(1)
+
+    # Final check
+    if vulnerabilities_found:
+        print("\n\n❌ Security vulnerabilities detected. Failing the check.")
+        sys.exit(1)
+    else:
+        print("\n\n✅ No security vulnerabilities detected. Check passed.")
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()
