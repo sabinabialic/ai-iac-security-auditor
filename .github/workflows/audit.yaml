@@ -33,9 +33,28 @@ jobs:
           filepath: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test/test.tf' }}
         env:
           HUGGING_FACE_HUB_TOKEN: ${{ secrets.HUGGING_FACE_HUB_TOKEN }}
+        continue-on-error: true
 
-      - name: Check Audit Results
-        if: ${{ failure() && steps.audit_step.outcome == 'failure' }}
+      - name: Display Audit Results
+        if: always()
         run: |
-          echo "❌ AI Security Auditor found vulnerabilities. Failing the workflow."
-          exit 1
+          if [ "${{ steps.audit_step.outcome }}" == "success" ]; then
+            echo "✅ Security audit passed - no vulnerabilities detected!"
+            echo "📁 File(s) analyzed: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test/test.tf' }}"
+          else
+            echo "❌ Security audit failed - vulnerabilities detected!"
+            echo "📁 File(s) analyzed: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test/test.tf' }}"
+            echo ""
+            echo "🔍 Vulnerability Details:"
+            echo "See the 'Run AI Security Auditor' step above for complete analysis results."
+            echo ""
+            echo "🛠️  Next Steps:"
+            echo "1. Review the vulnerability details in the audit output"
+            echo "2. Apply the recommended fixes to your Terraform code"
+            echo "3. Re-run the workflow to verify fixes"
+            echo ""
+            echo "📖 Resources:"
+            echo "- Terraform Security Best Practices: https://docs.bridgecrew.io/docs/terraform"
+            echo "- AWS Security Groups: https://docs.aws.amazon.com/vpc/latest/userguide/VPC_SecurityGroups.html"
+            exit 1
+          fi
