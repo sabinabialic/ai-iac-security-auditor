@@ -104,19 +104,56 @@ jobs:
               commentBody += `All Terraform files have been analyzed and no security issues were found.`;
             } else {
               commentBody += `❌ **FAILED** - Security vulnerabilities detected!\n\n`;
-              commentBody += `**Detailed Results:**\n\n`;
+              
               if (auditResults && auditResults.trim()) {
-                commentBody += '```\n' + auditResults + '\n```';
+                // Clean up and format the audit results
+                let formattedResults = auditResults
+                  .replace(/\\n/g, '\n')  // Convert \n to actual newlines
+                  .replace(/🔍 Auditing directory:.*?\n/g, '')  // Remove directory info
+                  .replace(/🤖 Initializing AI security auditor.*?\n/g, '')  // Remove init messages
+                  .replace(/✅ AI security auditor initialized successfully\.\n/g, '')  // Remove success message
+                  .replace(/--- Analyzing '([^']+)' ---/g, '### 📄 File: `$1`')  // Format file headers
+                  .replace(/🤖 Sending request to remote AI model\.\.\.\n/g, '')  // Remove API messages
+                  .replace(/Security Analysis Result for '[^']+':?\n/g, '')  // Remove redundant headers
+                  .replace(/An unexpected error occurred while processing ([^:]+): (.+)/g, '⚠️ **Error analyzing `$1`:** $2')  // Format errors
+                  .replace(/❌ Security vulnerabilities detected\. Failing the check\./g, '')  // Remove final message
+                  .trim();
+                
+                // Split into sections for better formatting
+                const sections = formattedResults.split(/### 📄 File: `([^`]+)`/);
+                let processedContent = '';
+                
+                for (let i = 1; i < sections.length; i += 2) {
+                  const fileName = sections[i];
+                  const fileContent = sections[i + 1]?.trim() || '';
+                  
+                  processedContent += `### 📄 File: \`${fileName}\`\n\n`;
+                  
+                  if (fileContent.includes('⚠️ **Error')) {
+                    processedContent += fileContent + '\n\n';
+                  } else if (fileContent.includes('✅ No security issues found')) {
+                    processedContent += '✅ **No security issues found in this file**\n\n';
+                  } else if (fileContent.trim()) {
+                    // Format vulnerability details
+                    let formattedContent = fileContent
+                      .replace(/- \*\*Vulnerability:\*\*/g, '**🚨 Vulnerability:**')
+                      .replace(/- \*\*Risk:\*\*/g, '**⚠️ Risk:**')
+                      .replace(/- \*\*Remediation:\*\*/g, '**🛠️ Remediation:**');
+                    
+                    processedContent += formattedContent + '\n\n';
+                  }
+                }
+                
+                commentBody += processedContent;
               } else {
-                commentBody += `Please check the workflow run for detailed vulnerability information.`;
+                commentBody += `Please check the workflow run for detailed vulnerability information.\n\n`;
               }
-              commentBody += `\n\n**Next Steps:**\n`;
+              
+              commentBody += `---\n\n`;
+              commentBody += `**🛠️ Next Steps:**\n`;
               commentBody += `1. Review the vulnerability details above\n`;
               commentBody += `2. Apply the recommended fixes to your Terraform code\n`;
               commentBody += `3. Push your changes to re-run the security audit\n\n`;
-              commentBody += `**Resources:**\n`;
-              commentBody += `- [Terraform Security Best Practices](https://docs.bridgecrew.io/docs/terraform)\n`;
-              commentBody += `- [AWS Security Groups](https://docs.aws.amazon.com/vpc/latest/userguide/VPC_SecurityGroups.html)`;
             }
             
             github.rest.issues.createComment({
