@@ -20,40 +20,85 @@ on:
         default: 'test'
 
 permissions:
+  contents: read
   pull-requests: write
 
 jobs:
-  iac-security-audit:
+  # Run the security audit
+  security-audit:
     runs-on: ubuntu-latest
+    outputs:
+      # Capture the logs and outcome of the audit step
+      logs: ${{ steps.audit_step.outputs.logs }}
+      outcome: ${{ steps.audit_step.outcome }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Run AI Security Auditor
         id: audit_step
-        uses: ./ 
-        with:
-          filepath: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test' }}
+        run: |
+          # Use an intermediary file to capture all output
+          output_file=$(mktemp)
+          if uses: ./, with: {filepath: 'test'} &> "$output_file"; then
+            echo "Audit passed"
+          else
+            echo "Audit failed"
+          fi
+          # Read the file content and format it for output
+          content=$(cat "$output_file")
+          echo "logs<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$content" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
         env:
           HUGGING_FACE_HUB_TOKEN: ${{ secrets.HUGGING_FACE_HUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true # Allows the workflow to continue to the reporting jobs
 
-      - name: Check Audit Results
-        if: ${{ failure() && steps.audit_step.outcome == 'failure' }}
-        run: |
-          echo "❌ AI Security Auditor found vulnerabilities. Failing the workflow."
-          exit 1
-  
-  add-pr-comment:
+  # Report the success or failure
+  report-status:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    needs: security-audit # This job depends on the first one
+    if: always() && github.event_name == 'pull_request' # Always run this job on PRs to report status
     steps:
-      - name: Post simple comment
+      - name: Post status comment to PR
         uses: actions/github-script@v7
         with:
           script: |
-            github.rest.issues.createComment({
+            const outcome = "${{ needs.security-audit.outputs.outcome }}";
+            const logs = `
+            ${{ needs.security-audit.outputs.logs }}
+            `;
+
+            let comment_body;
+
+            if (outcome === 'success') {
+              comment_body = `
+              ### ✅ AI Security Audit Passed
+              No vulnerabilities were detected.
+              `;
+            } else {
+              comment_body = `
+              ### ❌ AI Security Audit Failed
+              Vulnerabilities were detected. Please see the detailed output below.
+
+              <details><summary>Click to view full audit logs</summary>
+
+              \`\`\`
+              ${logs}
+              \`\`\`
+
+              </details>
+              `;
+            }
+            
+            await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: 'Hello world! This is a test comment from a GitHub Action. 👋'
-            })
+              body: comment_body
+            });
+
+            if (outcome !== 'success') {
+              core.setFailed("Security audit failed. See the PR comment for details.");
+            }
