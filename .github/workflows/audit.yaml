@@ -134,11 +134,14 @@ jobs:
                   } else if (fileContent.includes('✅ No security issues found')) {
                     processedContent += '✅ **No security issues found in this file**\n\n';
                   } else if (fileContent.trim()) {
-                    // Format vulnerability details
+                    // Format vulnerability details and remove large code blocks
                     let formattedContent = fileContent
                       .replace(/- \*\*Vulnerability:\*\*/g, '**🚨 Vulnerability:**')
                       .replace(/- \*\*Risk:\*\*/g, '\n\n**⚠️ Risk:**')
-                      .replace(/- \*\*Remediation:\*\*/g, '\n\n**🛠️ Remediation:**');
+                      .replace(/- \*\*Remediation:\*\*/g, '\n\n**🛠️ Remediation:**')
+                      .replace(/```hcl[\s\S]*?```/g, '\n\n*📋 Complete remediation code examples are available in the workflow run logs.*')
+                      .replace(/```[\s\S]*?```/g, '\n\n*📋 Complete remediation code examples are available in the workflow run logs.*')
+                      .replace(/resource\s+"[^"]+"\s+"[^"]+"\s+\{[\s\S]*?\n\}/g, '\n\n*📋 Complete remediation code examples are available in the workflow run logs.*');
                     
                     processedContent += formattedContent + '\n\n';
                   }
