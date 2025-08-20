@@ -17,26 +17,35 @@ on:
         default: 'test'
 
 permissions:
-  pull-requests: write
+  contents: read
+  pull-requests: write # This permission is specifically for the PR comment job
 
 jobs:
-  iac-security-audit:
+  audit-no-comment:
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Run AI Security Auditor
-        id: audit_step
-        uses: ./ 
+        uses: ./
         with:
           filepath: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test' }}
         env:
           HUGGING_FACE_HUB_TOKEN: ${{ secrets.HUGGING_FACE_HUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check Audit Results
-        if: failure()
-        run: |
-          echo "❌ AI Security Auditor found vulnerabilities. Failing the workflow."
-          exit 1
+  audit-with-pr-comment:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run AI Security Auditor and Comment on PR
+        uses: ./
+        with:
+          filepath: 'test'
+        env:
+          HUGGING_FACE_HUB_TOKEN: ${{ secrets.HUGGING_FACE_HUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
