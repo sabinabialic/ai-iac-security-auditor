@@ -1,41 +1,87 @@
 name: Terraform Security Audit
 
 on:
-  # Trigger on pull requests that change .tf files
   pull_request:
     paths:
       - '**.tf'
-  # Trigger on pushes to the main branch that change .tf files
   push:
     branches:
       - main
     paths:
       - '**.tf'
-  # Allow the workflow to be run manually from the Actions tab
   workflow_dispatch:
     inputs:
       filepath:
-        description: 'Path to the Terraform file to audit'
+        description: 'Path to the Terraform file or directory to audit'
         required: true
         default: 'test'
 
+# Allow the job to write to pull requests and checks
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
 jobs:
-  iac-security-audit:
+  security-audit:
     runs-on: ubuntu-latest
+    outputs:
+      failed_files: ${{ steps.audit_step.outputs.failed_files }}
+      audit_outcome: ${{ steps.audit_step.outcome }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Run AI Security Auditor
         id: audit_step
-        uses: ./ 
-        with:
-          filepath: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test' }}
+        run: |
+          FAILED_FILES=""
+          OVERALL_FAILURE=0
+          
+          # Find all .tf files in the repository
+          TF_FILES=$(find . -name "*.tf" -type f)
+          
+          if [ -z "$TF_FILES" ]; then
+            echo "No Terraform files found to audit."
+            exit 0
+          fi
+          
+          for file in $TF_FILES; do
+            echo -e "\n--- Auditing: $file ---"
+            # The python script will exit with 1 on failure, 0 on success
+            if ! python3 main.py "$file"; then
+              echo "❌ Vulnerabilities found in $file"
+              FAILED_FILES="$FAILED_FILES $file"
+              OVERALL_FAILURE=1
+            else
+              echo "✅ No vulnerabilities found in $file"
+            fi
+          done
+          
+          echo "failed_files=$FAILED_FILES" >> $GITHUB_OUTPUT
+
+          if [ $OVERALL_FAILURE -eq 1 ]; then
+            exit 1
+          fi
         env:
           HUGGING_FACE_HUB_TOKEN: ${{ secrets.HUGGING_FACE_HUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
 
-      - name: Check Audit Results
-        if: ${{ failure() && steps.audit_step.outcome == 'failure' }}
+  report-failure:
+    runs-on: ubuntu-latest
+    needs: security-audit
+    if: needs.security-audit.outputs.audit_outcome == 'failure'
+    steps:
+      - name: Report failing files
         run: |
-          echo "❌ AI Security Auditor found vulnerabilities. Failing the workflow."
+          echo "## ❌ AI Security Audit Failed" >> $GITHUB_STEP_SUMMARY
+          echo "Vulnerabilities were detected in the following files:" >> $GITHUB_STEP_SUMMARY
+          
+          for file in ${{ needs.security-audit.outputs.failed_files }}; do
+            echo "- \`$file\`" >> $GITHUB_STEP_SUMMARY
+          done
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "See the 'Run AI Security Auditor' step in the 'security-audit' job for details." >> $GITHUB_STEP_SUMMARY
           exit 1

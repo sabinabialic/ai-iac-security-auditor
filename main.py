@@ -1,10 +1,15 @@
 import argparse
 import os
+from github import Github
 import hcl2
 import json
 import sys
 from huggingface_hub import InferenceClient
 
+# Environment variables
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+REPO_NAME = os.getenv("GITHUB_REPOSITORY")
+EVENT_PATH = os.getenv("GITHUB_EVENT_PATH")
 MODEL_ID = "mistralai/Mistral-7B-Instruct-v0.2"
 
 SYSTEM_PROMPT = """You are a highly specialized and strict security auditor for Terraform code. Your ONLY task is to identify high-impact security vulnerabilities in the provided code block.
@@ -35,6 +40,36 @@ def create_security_auditor():
     auditor = InferenceClient()
     print("✅ AI security auditor initialized successfully.")
     return auditor
+
+# Post a comment on a PR
+def post_pr_comment(analysis_result, filepath):
+    """Posts the audit findings as a comment on the relevant pull request."""
+    try:
+        if not all([GITHUB_TOKEN, REPO_NAME, EVENT_PATH]):
+            print("INFO: Not a GitHub Action environment. Skipping PR comment.")
+            return
+
+        with open(EVENT_PATH, 'r') as f:
+            event_data = json.load(f)
+        
+        if 'pull_request' not in event_data:
+            print("INFO: Not a pull request event. Skipping PR comment.")
+            return
+            
+        pr_number = event_data['pull_request']['number']
+
+        g = Github(GITHUB_TOKEN)
+        repo = g.get_repo(REPO_NAME)
+        pull_request = repo.get_pull(pr_number)
+        
+        comment = f"### 🤖 AI Security Audit Results\n\n**File:** `{filepath}`\n\n---\n\n{analysis_result}"
+        
+        pull_request.create_issue_comment(comment)
+        print(f"✅ Successfully posted comment to Pull Request #{pr_number}.")
+
+    except Exception as e:
+        print(f"❌ Failed to post PR comment: {e}")
+
 
 def main():
     """Main function to parse arguments and run the security audit."""

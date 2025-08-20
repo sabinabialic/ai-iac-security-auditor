@@ -4,7 +4,7 @@ author: 'Sabina Bialic'
 
 inputs:
   filepath:
-    description: 'The path to the Terraform file to audit.'
+    description: 'The path to the Terraform file or directory to audit.'
     required: true
 
 runs:
