@@ -1,0 +1,28 @@
+name: Test Published Security Auditor
+
+on:
+  # Allow the workflow to be run manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      directory_to_scan:
+        description: 'Directory containing Terraform files to audit'
+        required: true
+        default: 'test'
+
+jobs:
+  test-auditor-action:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Check out the code of the repository where this workflow is located
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      # Step 2: Run your published action from the GitHub Marketplace
+      - name: Run AI IaC Security Auditor
+        uses: sabinabialic/ai-iac-security-auditor@v1
+        with:
+          # Use the directory path provided in the manual trigger
+          filepath: ${{ github.event.inputs.directory_to_scan }}
+        env:
+          # This secret must be set in the repository running this workflow
+          HUGGING_FACE_HUB_TOKEN: ${{ secrets.HUGGING_FACE_HUB_TOKEN }}
