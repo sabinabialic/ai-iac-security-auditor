@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
         
       - name: Run AI IaC Security Auditor
-        uses: sabinabialic/ai-iac-security-auditor@v1
+        uses: sabinabialic/ai-iac-security-auditor@v1.0.1
         with:
           filepath: ${{ github.event.inputs.directory_to_scan }}
         env:
