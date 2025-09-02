@@ -44,24 +44,22 @@ jobs:
           
           echo "🔍 Running security audit on: $FILEPATH"
           
-          # Capture the output
+          # Capture both stdout and stderr
           if python3 main.py "$FILEPATH" > audit_output.txt 2>&1; then
             AUDIT_RESULT="success"
           else
             AUDIT_RESULT="failed"
           fi
           
-          # Set outputs for the next job
+          # Read the output and set as output variable
           AUDIT_OUTPUT=$(cat audit_output.txt)
           echo "audit_results<<EOF" >> $GITHUB_OUTPUT
           echo "$AUDIT_OUTPUT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           echo "audit_outcome=$AUDIT_RESULT" >> $GITHUB_OUTPUT
           
-          # Add job summary
+          # Write to job summary
           echo "## 🤖 AI Security Audit Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
           if [ "$AUDIT_RESULT" = "failed" ]; then
             echo "### ❌ Status: FAILED" >> $GITHUB_STEP_SUMMARY
             echo "Vulnerabilities were detected. See the logs and the PR comment for details." >> $GITHUB_STEP_SUMMARY
@@ -69,14 +67,11 @@ jobs:
             echo "### ✅ Status: PASSED" >> $GITHUB_STEP_SUMMARY
             echo "No security vulnerabilities were detected." >> $GITHUB_STEP_SUMMARY
           fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Path Analyzed:** \`$FILEPATH\`" >> $GITHUB_STEP_SUMMARY
-          
+
           # Display the full logs in the step output
           cat audit_output.txt
           
-          # Exit with appropriate code
           if [ "$AUDIT_RESULT" = "failed" ]; then
             exit 1
           fi
@@ -95,17 +90,28 @@ jobs:
           AUDIT_RESULTS: ${{ needs.iac-security-audit.outputs.audit-results }}
         with:
           script: |
-            // This JavaScript block remains the same
             const auditOutcome = process.env.AUDIT_OUTCOME;
             const auditResults = process.env.AUDIT_RESULTS;
             
             let commentBody = `## 🤖 AI Security Audit Results\n\n`;
             
             if (auditOutcome === 'success') {
-              commentBody += `✅ **PASSED** - No security vulnerabilities were detected!`;
+              commentBody += `✅ **PASSED** - No security vulnerabilities detected!`;
             } else {
               commentBody += `❌ **FAILED** - Vulnerabilities were detected!\n\n`;
-              commentBody += `<details><summary>Click to view full audit logs</summary>\n\n\`\`\`\n${auditResults}\n\`\`\`\n\n</details>`;
+              
+              // This detailed formatting logic is now restored
+              let formattedResults = auditResults
+                .replace(/🔍 Auditing.*?\n/g, '')
+                .replace(/🤖 Initializing.*?\n/g, '')
+                .replace(/✅ AI security auditor initialized successfully\.\n/g, '')
+                .replace(/--- Analyzing '([^']+)' ---/g, '### 📄 File: `$1`')
+                .replace(/🤖 Sending request to remote AI model\.\.\.\n/g, '')
+                .replace(/Security Analysis Result for '[^']+':?\n/g, '')
+                .replace(/❌ Security vulnerabilities detected.*?\n/g, '')
+                .trim();
+
+              commentBody += formattedResults;
             }
             
             github.rest.issues.createComment({
