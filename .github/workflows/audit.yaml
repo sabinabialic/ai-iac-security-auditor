@@ -58,7 +58,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
           echo "audit_outcome=$AUDIT_RESULT" >> $GITHUB_OUTPUT
           
-          # --- ADD JOB SUMMARY ---
+          # Add job summary
           echo "## 🤖 AI Security Audit Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
