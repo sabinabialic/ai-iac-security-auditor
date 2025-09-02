@@ -30,6 +30,20 @@ A developer runs your CLI assistant on their machine against a .tf file. The too
 ### As an Automated CI/CD Guardrail
 The tool is integrated into a CI/CD pipeline (e.g., as a GitHub Action). When a developer submits a pull request with Terraform changes, the action runs automatically. If vulnerabilities are found, it can fail the build or post a comment on the PR, preventing insecure code from being merged.
 
+### Usage
+To use this action in your workflow, you can reference it as follows:
+
+```
+- name: Run AI Security Auditor
+  # Now references your public, versioned action
+  uses: sabinabialic/ai-iac-security-auditor@v1
+  with:
+    filepath: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test' }}
+  env:
+    HUGGING_FACE_HUB_TOKEN: ${{ secrets.HUGGING_FACE_HUB_TOKEN }}
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
 ## Development
 1. Create and activate a virtual environment:
   ```
