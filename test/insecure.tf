@@ -1,6 +1,6 @@
 # Vulnerability: Publicly accessible S3 bucket
 resource "aws_s3_bucket" "insecure_user_uploads" {
-  bucket = "my-insecure-public-bucket-67890"
+  bucket = "my-insecure-public-bucket-1234"
   acl    = "public-read" # This makes the bucket public
 
   tags = {
