@@ -2,8 +2,6 @@ name: AI Terraform Security Audit
 
 on:
   pull_request:
-    paths:
-      - '**.tf'
 
 permissions:
   contents: read
@@ -23,33 +21,24 @@ jobs:
       - name: Find changed Terraform files
         id: find_files
         run: |
-          # Compare the PR branch to the base branch to find changed .tf files
           BASE_REF=$(jq -r .pull_request.base.sha ${{ github.event_path }})
           TF_FILES=$(git diff --name-only $BASE_REF HEAD | grep '\.tf$' | jq -R . | jq -s . | tr -d '\n')
-          
-          if [[ "$TF_FILES" == "[]" ]]; then
-            echo "No .tf files changed in this PR."
-          else
-            echo "Found changed .tf files: $TF_FILES"
-          fi
           echo "files=$TF_FILES" >> $GITHUB_OUTPUT
 
   security-audit:
     runs-on: ubuntu-latest
     needs: finder
     if: needs.finder.outputs.matrix != '[]'
-    
     strategy:
       matrix:
         file: ${{ fromJson(needs.finder.outputs.matrix) }}
       fail-fast: false
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Run AI Security Auditor on ${{ matrix.file }}
-        uses: ./
+        uses: ./ # This uses the action defined in your action.yml
         with:
           filepath: ${{ matrix.file }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
