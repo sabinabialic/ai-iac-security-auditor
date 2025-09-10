@@ -32,7 +32,57 @@ A developer runs your CLI assistant on their machine against a .tf file. The too
 ### As an Automated CI/CD Guardrail
 The tool is integrated into a CI/CD pipeline (e.g., as a GitHub Action). When a developer submits a pull request with Terraform changes, the action runs automatically. If vulnerabilities are found, it can fail the build or post a comment on the PR, preventing insecure code from being merged.
 
-## Development
+## Running Locally
+
+### Prerequisites
+- Python 3.8 or higher
+- Hugging Face API token (free at [huggingface.co](https://huggingface.co/settings/tokens))
+
+### Setup
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/sabinabialic/ai-iac-security-auditor.git
+   cd ai-iac-security-auditor
+   ```
+
+2. **Create and activate a virtual environment:**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Set up your Hugging Face token:**
+   ```bash
+   export HF_API_TOKEN="your_token_here"
+   ```
+
+### Usage Examples
+
+#### Scan a single file:
+```bash
+python3 main.py path/to/your/main.tf
+```
+
+#### Scan all IaC files in a directory:
+```bash
+python3 main.py /path/to/infrastructure/
+```
+
+#### Scan with verbose output:
+```bash
+python3 main.py --verbose /path/to/files/
+```
+
+### Supported File Types
+- **Terraform:** `.tf` files
+- **Docker:** `Dockerfile`, `Dockerfile.*`, `*.dockerfile`
+
+### Development
 1. Create and activate a virtual environment:
   ```
   python3 -m venv venv
