@@ -1,21 +1,29 @@
-name: Terraform Security Audit
+name: Infrastructure Security Audit
 
 on:
-  # Trigger on pull requests that change .tf files
+  # Trigger on pull requests that change .tf files or Dockerfiles
   pull_request:
     paths:
       - '**.tf'
-  # Trigger on pushes to the main branch that change .tf files
+      - '**/Dockerfile'
+      - '**/Dockerfile.*'
+      - '**/dockerfile'
+      - '**/dockerfile.*'
+  # Trigger on pushes to the main branch that change .tf files or Dockerfiles
   push:
     branches:
       - main
     paths:
       - '**.tf'
+      - '**/Dockerfile'
+      - '**/Dockerfile.*'
+      - '**/dockerfile'
+      - '**/dockerfile.*'
   # Allow the workflow to be run manually from the Actions tab
   workflow_dispatch:
     inputs:
       filepath:
-        description: 'Path to the Terraform file to audit'
+        description: 'Path to the Terraform file, Dockerfile, or directory to audit (e.g., test/test.tf, Dockerfile, or test/)'
         required: true
         default: 'test'
 
@@ -47,7 +55,7 @@ jobs:
         run: |
           FILEPATH="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.filepath || 'test' }}"
           
-          echo "🔍 Running security audit on: $FILEPATH"
+          echo "🔍 Running infrastructure security audit on: $FILEPATH"
           
           # Capture both stdout and stderr
           if python3 main.py "$FILEPATH" > audit_output.txt 2>&1; then

@@ -12,17 +12,18 @@ REPO_NAME = os.getenv("GITHUB_REPOSITORY")
 EVENT_PATH = os.getenv("GITHUB_EVENT_PATH")
 MODEL_ID = "mistralai/Mistral-7B-Instruct-v0.2"
 
-SYSTEM_PROMPT = """You are a highly specialized and strict security auditor for Terraform code. Your ONLY task is to identify high-impact security vulnerabilities in the provided code block.
+SYSTEM_PROMPT = """You are a highly specialized and strict security auditor for Infrastructure as Code (Terraform) and Docker files. Your ONLY task is to identify high-impact security vulnerabilities in the provided code block.
 
 ---
 **CRITICAL INSTRUCTION: Your performance is judged on accuracy. You will be penalized for incorrectly identifying vulnerabilities in secure code. If you do not find a clear, high-impact vulnerability, you MUST follow the "no vulnerabilities" rule. Do NOT invent potential issues or suggest best-practice improvements if the code is already secure.**
 ---
 
 **Definition of a Vulnerability:**
-A vulnerability is a configuration that directly exposes a system to immediate and significant risk, such as public access (`0.0.0.0/0`), missing encryption, or `AdministratorAccess` IAM roles. Standard practices like hardcoding resource names are NOT vulnerabilities.
+- **Terraform:** Configurations that directly expose systems to immediate risk (public access `0.0.0.0/0`, missing encryption, `AdministratorAccess` IAM roles)
+- **Docker:** Configurations that create security risks (running as root, exposed secrets, vulnerable base images, unnecessary privileges)
 
 **Analysis Rules:**
-1.  Analyze ONLY the provided Terraform code. Do not assume any context outside this code.
+1.  Analyze ONLY the provided code. Do not assume any context outside this code.
 2.  If you find one or more clear vulnerabilities, your response MUST follow this exact format:
     - **Vulnerability:** [A one-sentence summary and its severity].
     - **Risk:** [A brief explanation of the risk].
@@ -72,43 +73,72 @@ def post_pr_comment(analysis_result, filepath):
 
 def main():
     """Main function to parse arguments and run the security audit."""
-    parser = argparse.ArgumentParser(description="AI-powered Terraform Security Auditor.")
-    parser.add_argument("path", help="Path to the Terraform file or directory to audit.")
+    parser = argparse.ArgumentParser(description="AI-powered Infrastructure Security Auditor for Terraform and Docker files.")
+    parser.add_argument("path", help="Path to the Terraform file, Dockerfile, or directory to audit.")
     args = parser.parse_args()
 
-    terraform_files = []
+    infrastructure_files = []
     # Check if the provided path is a directory or a single file
     if os.path.isdir(args.path):
         print(f"🔍 Auditing directory: {args.path}...")
         for root, _, files in os.walk(args.path):
             for file in files:
-                if file.endswith(".tf"):
-                    terraform_files.append(os.path.join(root, file))
-    elif os.path.isfile(args.path) and args.path.endswith(".tf"):
-        print(f"🔍 Auditing single file: {args.path}...")
-        terraform_files.append(args.path)
+                # Include Terraform files and Dockerfiles (various naming patterns)
+                if (file.endswith(".tf") or 
+                    file.lower() in ["dockerfile", "dockerfile.dev", "dockerfile.prod"] or 
+                    file.lower().startswith("dockerfile.") or
+                    file.lower().endswith(".dockerfile")):
+                    infrastructure_files.append(os.path.join(root, file))
+    elif os.path.isfile(args.path):
+        # Check if it's a supported file type
+        filename = os.path.basename(args.path).lower()
+        if (args.path.endswith(".tf") or 
+            filename in ["dockerfile", "dockerfile.dev", "dockerfile.prod"] or 
+            filename.startswith("dockerfile.") or
+            filename.endswith(".dockerfile")):
+            print(f"🔍 Auditing single file: {args.path}...")
+            infrastructure_files.append(args.path)
+        else:
+            print(f"❌ Unsupported file type: {args.path}")
+            print("Supported files: .tf (Terraform), Dockerfile, Dockerfile.*, *.dockerfile")
+            sys.exit(1)
 
-    if not terraform_files:
-        print("No Terraform files found to audit in the specified path.")
+    if not infrastructure_files:
+        print("No supported infrastructure files found to audit in the specified path.")
+        print("Supported files: .tf (Terraform), Dockerfile, Dockerfile.*, *.dockerfile")
         sys.exit(0)
 
     vulnerabilities_found = False
     auditor = create_security_auditor()
 
-    # Loop through all found Terraform files
-    for filepath in terraform_files:
+    # Loop through all found infrastructure files
+    for filepath in infrastructure_files:
         print(f"\n--- Analyzing '{filepath}' ---")
         try:
             with open(filepath, 'r', encoding='utf-8') as file:
-                full_terraform_code = file.read()
+                file_content = file.read()
             
-            if not full_terraform_code.strip():
+            if not file_content.strip():
                 print("File is empty. Skipping analysis.")
                 continue
 
+            # Determine file type for context
+            filename = os.path.basename(filepath).lower()
+            if filepath.endswith(".tf"):
+                file_type = "Terraform"
+            elif (filename in ["dockerfile", "dockerfile.dev", "dockerfile.prod"] or 
+                  filename.startswith("dockerfile.") or 
+                  filename.endswith(".dockerfile")):
+                file_type = "Docker"
+            else:
+                file_type = "Infrastructure"
+
+            # Add file type context to the prompt
+            user_content = f"File type: {file_type}\n\n{file_content}"
+
             messages = [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": full_terraform_code}
+                {"role": "user", "content": user_content}
             ]
             
             print("🤖 Sending request to remote AI model...")
